@@ -32,38 +32,93 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
     cooldownEndTime: null,
   });
 
+  const userId = 'default-user';
+
+  // Fetch initial state
+  React.useEffect(() => {
+    const fetchState = async () => {
+      try {
+        const res = await fetch(`/api/game/${userId}`);
+        if (res.ok) {
+          const data = await res.json();
+          // Ensure we don't overwrite with nulls if backend is empty (though backend creates default)
+          setState(prev => ({ ...prev, ...data }));
+        }
+      } catch (error) {
+        console.error('Failed to fetch game state:', error);
+      }
+    };
+    fetchState();
+  }, []);
+
+  // Helper to sync state to backend
+  const syncState = async (newState: Partial<GameState>) => {
+    try {
+      await fetch(`/api/game/${userId}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newState),
+      });
+    } catch (error) {
+      console.error('Failed to sync state:', error);
+    }
+  };
+
   const loseHeart = () => {
     setState(prev => {
       const newHearts = Math.max(0, prev.hearts - 1);
+      const updates: Partial<GameState> = { hearts: newHearts };
+
       if (newHearts === 0) {
-        return { ...prev, hearts: 0, cooldownEndTime: Date.now() + 30 * 60 * 1000 };
+        updates.cooldownEndTime = Date.now() + 30 * 60 * 1000;
       }
-      return { ...prev, hearts: newHearts };
+
+      syncState(updates);
+      return { ...prev, ...updates };
     });
   };
 
   const gainXP = (amount: number) => {
-    setState(prev => ({ ...prev, xp: prev.xp + amount }));
+    setState(prev => {
+      const updates = { xp: prev.xp + amount };
+      syncState(updates);
+      return { ...prev, ...updates };
+    });
   };
 
   const completeLevel = (levelId: number) => {
-    setState(prev => ({
-      ...prev,
-      completedLevels: [...new Set([...prev.completedLevels, levelId])],
-      currentLevel: Math.max(prev.currentLevel, levelId + 1),
-    }));
+    setState(prev => {
+      const updates = {
+        completedLevels: [...new Set([...prev.completedLevels, levelId])],
+        currentLevel: Math.max(prev.currentLevel, levelId + 1),
+      };
+      syncState(updates);
+      return { ...prev, ...updates };
+    });
   };
 
   const resetHearts = () => {
-    setState(prev => ({ ...prev, hearts: 5, cooldownEndTime: null }));
+    setState(prev => {
+      const updates = { hearts: 5, cooldownEndTime: null };
+      syncState(updates);
+      return { ...prev, ...updates };
+    });
   };
 
   const setCooldown = (minutes: number) => {
-    setState(prev => ({ ...prev, cooldownEndTime: Date.now() + minutes * 60 * 1000 }));
+    setState(prev => {
+      const updates = { cooldownEndTime: Date.now() + minutes * 60 * 1000 };
+      syncState(updates);
+      return { ...prev, ...updates };
+    });
   };
 
   const addGems = (amount: number) => {
-    setState(prev => ({ ...prev, gems: prev.gems + amount }));
+    setState(prev => {
+      const updates = { gems: prev.gems + amount };
+      syncState(updates);
+      return { ...prev, ...updates };
+    });
   };
 
   return (
